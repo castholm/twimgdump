@@ -250,7 +250,7 @@ dotnet_naming_rule.parameter_or_local_naming_rule.severity = warning
 
 dotnet_naming_rule.async_method_naming_rule.symbols = async_method
 dotnet_naming_rule.async_method_naming_rule.style = pascal_case_async_suffix
-dotnet_naming_rule.async_method_naming_rule.severity = warning
+dotnet_naming_rule.async_method_naming_rule.severity = none
 
 dotnet_naming_rule.other_symbol_naming_rule.symbols = other_symbol
 dotnet_naming_rule.other_symbol_naming_rule.style = pascal_case

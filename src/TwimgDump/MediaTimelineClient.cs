@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using TwimgDump.Json;
 
 namespace TwimgDump
 {
@@ -71,13 +72,13 @@ namespace TwimgDump
                 + (cursor is object ? $"&cursor={WebUtility.UrlEncode(cursor)}" : "")
                 + "&ext=mediaStats%2CcameraMoment";
 
-            var mediaRequest = new HttpRequestMessage(HttpMethod.Get, requestUri)
+            var request = new HttpRequestMessage(HttpMethod.Get, requestUri)
             {
                 Headers =
                 {
                     { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0" },
                     { "Accept", "*/*" },
-                    //{ "Accept-Encoding", "gzip, deflate, br" },
+                    //{ "Accept-Encoding", "gzip, deflate, br" }, // Added automatically by the HTTP client.
                     { "Accept-Language", "en-US,en;q=0.5" },
                     { "Connection", "keep-alive" },
                     { "DNT", "1" },
@@ -85,7 +86,7 @@ namespace TwimgDump
                     { "Referer", "https://twitter.com/" },
                     { "TE", "Trailers" },
                     { "authorization", "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA" },
-                    //{ "content-type", "application/json" },
+                    //{ "content-type", "application/json" }, // Not supported in this context by .NET.
                     { "x-csrf-token", _csrfToken! },
                     { "x-guest-token", _guestToken! },
                     { "x-twitter-client-language", "en" },
@@ -93,99 +94,88 @@ namespace TwimgDump
                 },
             };
 
-            var mediaResponse = await _httpClient.SendAsync(mediaRequest);
-            Debug.Assert(mediaResponse.IsSuccessStatusCode);
+            var response = await _httpClient.SendAsync(request);
+            Debug.Assert(response.IsSuccessStatusCode);
 
-            using var mediaJson = await JsonDocument.ParseAsync(await mediaResponse.Content.ReadAsStreamAsync());
+            // Twitter's timeline API response consists of two top level objects:
+            //
+            // o  'globalObjects', which is a collection of tweets, users and other data.
+            //
+            // o  'timeline', which contains instructions to the client letting it know what tweets and other elements
+            //    to add to the timeline in what order.  These instructions also include two cursors pointing to the
+            //    previous and next page of tweets.
 
-            var tweetsObject = mediaJson.RootElement
-                .GetProperty("globalObjects")
-                .GetProperty("tweets");
+            using var jsonDocument = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+            var jsonRoot = new JsonValue(jsonDocument);
 
-            var instructionsArray = mediaJson.RootElement
-                .GetProperty("timeline")
-                .GetProperty("instructions");
+            var tweetsObject = jsonRoot["globalObjects"]["tweets"];
+            Debug.Assert(tweetsObject.Kind == JsonValueKind.Object);
 
-            var entriesArray = instructionsArray.EnumerateArray()
-                .SelectMany(x => x.TryGetProperty("addEntries", out var addEntriesObject)
-                    ? Enumerable.Repeat(addEntriesObject.GetProperty("entries"), 1)
-                    : Enumerable.Empty<JsonElement>())
-                .First();
+            var instructionsArray = jsonRoot["timeline"]["instructions"];
+            Debug.Assert(instructionsArray.Kind == JsonValueKind.Array);
 
-            var json = mediaJson.ToString();
+            var entriesArray = instructionsArray.Elements
+                .Select(x => x["addEntries"]["entries"])
+                .Where(x => x.Kind == JsonValueKind.Array)
+                .FirstOrDefault();
+            Debug.Assert(entriesArray.Kind == JsonValueKind.Array);
 
-            var tweetObjects = entriesArray.EnumerateArray()
-                .SelectMany(x
-                    => x.GetProperty("sortIndex").GetString() is string sortIndex
-                    && x.GetProperty("content").TryGetProperty("item", out var itemObject)
-                    && itemObject.GetProperty("content").TryGetProperty("tweet", out var tweetReferenceObject)
-                    && tweetReferenceObject.GetProperty("id").GetString() is string tweetId
-                        ? Enumerable.Repeat((
-                            TweetObject: tweetsObject.GetProperty(tweetId),
-                            SortIndex: sortIndex),
-                            1)
-                        : Enumerable.Empty<(JsonElement TweetObject, string SortIndex)>())
-                .OrderByDescending(x => x.SortIndex, StringComparer.Ordinal)
-                .Select(x => x.TweetObject)
+            var tweetObjects = entriesArray.Elements
+                .OrderByDescending(x => x["sortIndex"].GetString(), StringComparer.Ordinal)
+                .Select(x => tweetsObject[x["content"]["item"]["content"]["tweet"]["id"].GetString()])
+                .Where(x => x.Kind == JsonValueKind.Object)
                 .ToList();
 
-            var mediaTweets = tweetObjects
-                .SelectMany(x
-                    => x.GetProperty("id_str").GetString() is string tweetId
-                    && x.GetProperty("extended_entities").GetProperty("media") is JsonElement mediaArray
-                    && mediaArray.EnumerateArray()
-                            .Select(mediaObject =>
+            var tweets = tweetObjects
+                .Select(x => (
+                    TweetId: x["id_str"].GetString(),
+                    MediaUrls: (IList<string>)x["extended_entities"]["media"].Elements
+                        .Select(mediaObject =>
+                        {
+                            var type = mediaObject["type"].GetString();
+                            Debug.Assert(type is object);
+
+                            if (type == "photo")
                             {
-                                var type = mediaObject.GetProperty("type").GetString();
+                                var mediaUrl = mediaObject["media_url_https"].GetString();
+                                Debug.Assert(mediaUrl is object);
 
-                                if (type == "photo")
-                                {
-                                    return Regex.Replace(
-                                        mediaObject.GetProperty("media_url_https").GetString(),
-                                        @"^(.+)\.(.+)$",
-                                        "$1?format=$2&name=orig");
-                                }
+                                return Regex.Replace(mediaUrl, @"^(.+)\.(.+)$", "$1?format=$2&name=orig");
+                            }
 
-                                var variantsArray = mediaObject.GetProperty("video_info").GetProperty("variants");
+                            var variantsArray = mediaObject["video_info"]["variants"];
+                            Debug.Assert(variantsArray.Kind == JsonValueKind.Array);
 
-                                // TODO: Log the media type and resolution.  We currently assume that the variant with
-                                // the highest bitrate will be an MP4 file and have the highest resolution.
+                            // We currently assume that the variant with the highest bitrate will be an MP4 file and
+                            // have the highest resolution.
 
-                                return variantsArray.EnumerateArray()
-                                    .OrderByDescending(x => x.TryGetProperty("bitrate", out var bitrateProperty)
-                                        ? bitrateProperty.GetInt32()
-                                        : 0)
-                                    .Select(x => x.GetProperty("url").GetString())
-                                    .First();
-                            })
-                            .ToList()
-                            is IList<string> mediaUrls
-                        ? Enumerable.Repeat((
-                            TweetId: tweetId,
-                            MediaUrl: mediaUrls),
-                            1)
-                        : Enumerable.Empty<(string TweetId, IList<string> MediaUrls)>())
+                            return variantsArray.Elements
+                                .OrderByDescending(x => x["bitrate"].GetInt32())
+                                .Select(x => x["url"].GetString())
+                                .FirstOrDefault();
+                        })
+                        .OfType<string>()
+                        .ToList()))
+                .Where(x => x.TweetId is object && x.MediaUrls.Any())
                 .ToList();
 
-            var cursorTop = entriesArray.EnumerateArray()
-                .SelectMany(x
-                    => x.GetProperty("content").TryGetProperty("operation", out var operationObject)
-                    && operationObject.TryGetProperty("cursor", out var cursorObject)
-                    && cursorObject.GetProperty("cursorType").GetString() == "Top"
-                        ? Enumerable.Repeat(cursorObject.GetProperty("value").GetString(), 1)
-                        : Enumerable.Empty<string>())
-                .Single();
+            var cursorTop = entriesArray.Elements
+                .Select(x => x["content"]["operation"]["cursor"])
+                .Where(x => x["cursorType"].GetString() == "Top")
+                .Select(x => x["value"].GetString())
+                .OfType<string>()
+                .FirstOrDefault();
+            Debug.Assert(cursorTop is object);
 
-            var cursorBottom = entriesArray.EnumerateArray()
-                .SelectMany(x
-                    => x.GetProperty("content").TryGetProperty("operation", out var operationObject)
-                    && operationObject.TryGetProperty("cursor", out var cursorObject)
-                    && cursorObject.GetProperty("cursorType").GetString() == "Bottom"
-                        ? Enumerable.Repeat(cursorObject.GetProperty("value").GetString(), 1)
-                        : Enumerable.Empty<string>())
-                .Single();
+            var cursorBottom = entriesArray.Elements
+                .Select(x => x["content"]["operation"]["cursor"])
+                .Where(x => x["cursorType"].GetString() == "Bottom")
+                .Select(x => x["value"].GetString())
+                .OfType<string>()
+                .FirstOrDefault();
+            Debug.Assert(cursorBottom is object);
 
-            return (mediaTweets, cursorTop, cursorBottom);
+            return (tweets!, cursorTop, cursorBottom);
         }
 
         private async Task<string> FetchGuestTokenAsync()
@@ -196,7 +186,7 @@ namespace TwimgDump
                 {
                     { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0" },
                     { "Accept", "*/*" },
-                    //{ "Accept-Encoding", "gzip, deflate, br" },
+                    //{ "Accept-Encoding", "gzip, deflate, br" }, // Added automatically by the HTTP client.
                     { "Accept-Language", "en-US,en;q=0.5" },
                     { "Connection", "keep-alive" },
                     { "DNT", "1" },
@@ -204,7 +194,7 @@ namespace TwimgDump
                     { "Referer", "https://twitter.com/" },
                     { "TE", "Trailers" },
                     { "authorization", "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA" },
-                    //{ "content-type", "application/x-www-form-urlencoded" },
+                    //{ "content-type", "application/json" }, // Not supported in this context by .NET.
                     { "x-twitter-client-language", "en" },
                     { "x-twitter-active-user", "yes" },
                 },
@@ -213,9 +203,10 @@ namespace TwimgDump
             var response = await _httpClient.SendAsync(request);
             Debug.Assert(response.IsSuccessStatusCode);
 
-            using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+            using var jsonDocument = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+            var jsonRoot = new JsonValue(jsonDocument);
 
-            var guestToken = json.RootElement.GetProperty("guest_token").GetString();
+            var guestToken = jsonRoot["guest_token"].GetString();
             Debug.Assert(guestToken is object);
 
             _httpClientHandler.CookieContainer.SetCookies(new Uri("https://twitter.com/"), $"gt={guestToken}; Max-Age=10800; Domain=.twitter.com; Path=/; Secure");
@@ -225,6 +216,10 @@ namespace TwimgDump
 
         private Task<string> FetchCsrfTokenAsync()
         {
+            // Twitter uses the double submit cookie pattern to mitigate CSRF.  The CSRF token is generated
+            // client-side and is a 32-digit hexadecimal sequence, which conveniently is the length of a GUID
+            // formatted according to the 'N' format specifier.
+
             var csrfToken = Guid.NewGuid().ToString("N");
 
             _httpClientHandler.CookieContainer.SetCookies(new Uri("https://twitter.com/"), $"ct0={csrfToken}; Max-Age=21600; Domain=.twitter.com; Path=/; Secure");
@@ -240,7 +235,7 @@ namespace TwimgDump
                 {
                     { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0" },
                     { "Accept", "*/*" },
-                    //{ "Accept-Encoding", "gzip, deflate, br" },
+                    //{ "Accept-Encoding", "gzip, deflate, br" }, // Added automatically by the HTTP client.
                     { "Accept-Language", "en-US,en;q=0.5" },
                     { "Connection", "keep-alive" },
                     { "DNT", "1" },
@@ -248,7 +243,7 @@ namespace TwimgDump
                     { "Referer", "https://twitter.com/" },
                     { "TE", "Trailers" },
                     { "authorization", "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA" },
-                    //{ "content-type", "application/json" },
+                    //{ "content-type", "application/json" }, // Not supported in this context by .NET.
                     { "x-csrf-token", _csrfToken! },
                     { "x-guest-token", _guestToken! },
                     { "x-twitter-client-language", "en" },
@@ -259,13 +254,10 @@ namespace TwimgDump
             var response = await _httpClient.SendAsync(request);
             Debug.Assert(response.IsSuccessStatusCode);
 
-            using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+            using var jsonDocument = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+            var jsonRoot = new JsonValue(jsonDocument);
 
-            var userId = json.RootElement
-                .GetProperty("data")
-                .GetProperty("user")
-                .GetProperty("rest_id")
-                .GetString();
+            var userId = jsonRoot["data"]["user"]["rest_id"].GetString();
             Debug.Assert(userId is object);
 
             return userId;

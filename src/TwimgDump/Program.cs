@@ -12,7 +12,7 @@ namespace TwimgDump
             var userScreenName = args.ElementAtOrDefault(0);
             if (userScreenName is null)
             {
-                Console.WriteLine("Usage: twimg-dump <user-screen-name>");
+                Console.WriteLine("Usage: twimgdump <user-screen-name>");
 
                 return;
             }

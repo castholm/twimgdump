@@ -76,7 +76,6 @@ namespace TwimgDump
             {
                 Headers =
                 {
-                    { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0" },
                     { "Accept", "*/*" },
                     //{ "Accept-Encoding", "gzip, deflate, br" }, // Added automatically by the HTTP client.
                     { "Accept-Language", "en-US,en;q=0.5" },
@@ -85,6 +84,7 @@ namespace TwimgDump
                     { "Origin", "https://twitter.com" },
                     { "Referer", "https://twitter.com/" },
                     { "TE", "Trailers" },
+                    { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0" },
                     { "authorization", "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA" },
                     //{ "content-type", "application/json" }, // Not supported in this context by .NET.
                     { "x-csrf-token", _csrfToken! },
@@ -184,7 +184,6 @@ namespace TwimgDump
             {
                 Headers =
                 {
-                    { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0" },
                     { "Accept", "*/*" },
                     //{ "Accept-Encoding", "gzip, deflate, br" }, // Added automatically by the HTTP client.
                     { "Accept-Language", "en-US,en;q=0.5" },
@@ -193,6 +192,7 @@ namespace TwimgDump
                     { "Origin", "https://twitter.com" },
                     { "Referer", "https://twitter.com/" },
                     { "TE", "Trailers" },
+                    { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0" },
                     { "authorization", "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA" },
                     //{ "content-type", "application/json" }, // Not supported in this context by .NET.
                     { "x-twitter-client-language", "en" },
@@ -233,7 +233,6 @@ namespace TwimgDump
             {
                 Headers =
                 {
-                    { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0" },
                     { "Accept", "*/*" },
                     //{ "Accept-Encoding", "gzip, deflate, br" }, // Added automatically by the HTTP client.
                     { "Accept-Language", "en-US,en;q=0.5" },
@@ -242,6 +241,7 @@ namespace TwimgDump
                     { "Origin", "https://twitter.com" },
                     { "Referer", "https://twitter.com/" },
                     { "TE", "Trailers" },
+                    { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0" },
                     { "authorization", "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA" },
                     //{ "content-type", "application/json" }, // Not supported in this context by .NET.
                     { "x-csrf-token", _csrfToken! },

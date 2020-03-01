@@ -77,7 +77,7 @@ namespace TwimgDump
                 Headers =
                 {
                     { "Accept", "*/*" },
-                    //{ "Accept-Encoding", "gzip, deflate, br" }, // Added automatically by the HTTP client.
+                    { "Accept-Encoding", "gzip, deflate, br" },
                     { "Accept-Language", "en-US,en;q=0.5" },
                     { "Connection", "keep-alive" },
                     { "DNT", "1" },
@@ -86,7 +86,7 @@ namespace TwimgDump
                     { "TE", "Trailers" },
                     { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0" },
                     { "authorization", "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA" },
-                    //{ "content-type", "application/json" }, // Not supported in this context by .NET.
+                    //{ "content-type", "application/json" }, // Included in browsers but supported in this context by .NET.
                     { "x-csrf-token", _csrfToken! },
                     { "x-guest-token", _guestToken! },
                     { "x-twitter-client-language", "en" },
@@ -185,7 +185,7 @@ namespace TwimgDump
                 Headers =
                 {
                     { "Accept", "*/*" },
-                    //{ "Accept-Encoding", "gzip, deflate, br" }, // Added automatically by the HTTP client.
+                    { "Accept-Encoding", "gzip, deflate, br" },
                     { "Accept-Language", "en-US,en;q=0.5" },
                     { "Connection", "keep-alive" },
                     { "DNT", "1" },
@@ -194,7 +194,7 @@ namespace TwimgDump
                     { "TE", "Trailers" },
                     { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0" },
                     { "authorization", "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA" },
-                    //{ "content-type", "application/json" }, // Not supported in this context by .NET.
+                    //{ "content-type", "application/json" }, // Included in browsers but supported in this context by .NET.
                     { "x-twitter-client-language", "en" },
                     { "x-twitter-active-user", "yes" },
                 },
@@ -217,8 +217,8 @@ namespace TwimgDump
         private Task<string> FetchCsrfTokenAsync()
         {
             // Twitter uses the double submit cookie pattern to mitigate CSRF.  The CSRF token is generated
-            // client-side and is a 32-digit hexadecimal sequence, which conveniently is the length of a GUID
-            // formatted according to the 'N' format specifier.
+            // client-side and is a 32-digit hexadecimal sequence, which conveniently happens to be the length of a
+            // GUID formatted according to the 'N' format specifier.
 
             var csrfToken = Guid.NewGuid().ToString("N");
 
@@ -234,7 +234,7 @@ namespace TwimgDump
                 Headers =
                 {
                     { "Accept", "*/*" },
-                    //{ "Accept-Encoding", "gzip, deflate, br" }, // Added automatically by the HTTP client.
+                    { "Accept-Encoding", "gzip, deflate, br" },
                     { "Accept-Language", "en-US,en;q=0.5" },
                     { "Connection", "keep-alive" },
                     { "DNT", "1" },
@@ -243,7 +243,7 @@ namespace TwimgDump
                     { "TE", "Trailers" },
                     { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0" },
                     { "authorization", "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA" },
-                    //{ "content-type", "application/json" }, // Not supported in this context by .NET.
+                    //{ "content-type", "application/json" }, // Included in browsers but supported in this context by .NET.
                     { "x-csrf-token", _csrfToken! },
                     { "x-guest-token", _guestToken! },
                     { "x-twitter-client-language", "en" },

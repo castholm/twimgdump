@@ -7,7 +7,7 @@ namespace TwimgDump.Json
     /// <summary>
     /// Provides a convenient and forgiving API for navigating a <see cref="JsonDocument"/>.
     /// </summary>
-    public readonly struct JsonValue
+    internal readonly struct JsonValue
     {
         private readonly JsonElement _jsonElement;
 

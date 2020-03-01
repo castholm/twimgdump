@@ -1,10 +1,10 @@
 # twimgdump
 
 Just because you've liked or retweeted a piece of media on twitter doesn't mean that it will still be there tomorrow.
-The author might suddenly become permanently suspended.  Or they might have a nervous breakdown and permanently delete
-a bunch of their old tweets.  Or they might be "canceled" for Americentric ideological reasons and be forced to delete
-tweets that the public deems inappropriate.  Whatever the reason may be, the point remains: if you like a user's
-uploaded media, you probably want to keep local copies of them.
+The author might suddenly become permanently suspended.  Or they might have a lapse of judgement and permanently
+delete a bunch of their old tweets.  Or they might be "canceled" for Americentric ideological reasons and be bullied
+into deleting tweets deemed inappropriate.  Whatever the reason may be, the point is: if you like a user's uploaded
+media, you probably want to keep local copies of them.
 
 twimgdump is a small command-line tool I developed to help me make local copies of art uploaded by artists I follow on
 twitter.  It fetches all tweets posted to a Twitter user's media timeline and saves the attached photos, videos and
@@ -13,15 +13,21 @@ GIFs to disk.
 ## Usage
 
 ```
-twimgdump <user-screen-name>
+Usage:
+  twimgdump [options] [--] <user-screen-name>
+
+Options:
+  -c, --cursor <cursor>            Set the initial cursor value.
+  -h, --help                       Display this help text.
+  -o, --output <output-directory>  Set the output directory.
+  -V, --version                    Display the version number.
 ```
 
 ## Features
 
 * Downloads all photos, videos and GIFs (read: also videos) from a Twitter user's media timeline.
 * Uses the API the twitter.com website itself uses, meaning that no authentication or API keys are required.
-* Encodes the user's screen name and the IDs of the tweets and media in the path of the downloaded files for easy
-  reverse lookup.
+* Encodes the ID of the tweets in the names of downloaded files for easy reverse lookup.
 * Supports downloading media from profiles marked as containing sensitive content.
 
 ## Limitations
@@ -31,7 +37,7 @@ twimgdump <user-screen-name>
 * Does not currently handle rate limits at all (though this usually won't be a problem unless you're downloading a
   massive amount of media).
 * Does not currently support downloading media from protected profiles.
-* Subject to break if Twitter makes sudden changes to their API.
+* **Will** break if Twitter makes sudden changes to their API.
 
 ## Dependencies
 

@@ -106,24 +106,24 @@ namespace TwimgDump
             //    previous and next page of tweets.
 
             using var jsonDocument = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
-            var jsonRoot = new JsonValue(jsonDocument);
+            var rootNode = jsonDocument.RootElement.AsJsonNode();
 
-            var tweetsObject = jsonRoot["globalObjects"]["tweets"];
-            Debug.Assert(tweetsObject.Kind == JsonValueKind.Object);
+            var tweetsObject = rootNode["globalObjects"]["tweets"];
+            Debug.Assert(tweetsObject.Type == JsonNodeType.Object);
 
-            var instructionsArray = jsonRoot["timeline"]["instructions"];
-            Debug.Assert(instructionsArray.Kind == JsonValueKind.Array);
+            var instructionsArray = rootNode["timeline"]["instructions"];
+            Debug.Assert(instructionsArray.Type == JsonNodeType.Array);
 
             var entriesArray = instructionsArray.Elements
                 .Select(x => x["addEntries"]["entries"])
-                .Where(x => x.Kind == JsonValueKind.Array)
+                .Where(x => x.Type == JsonNodeType.Array)
                 .FirstOrDefault();
-            Debug.Assert(entriesArray.Kind == JsonValueKind.Array);
+            Debug.Assert(entriesArray.Type == JsonNodeType.Array);
 
             var tweetObjects = entriesArray.Elements
                 .OrderByDescending(x => x["sortIndex"].GetString(), StringComparer.Ordinal)
                 .Select(x => tweetsObject[x["content"]["item"]["content"]["tweet"]["id"].GetString()])
-                .Where(x => x.Kind == JsonValueKind.Object)
+                .Where(x => x.Type == JsonNodeType.Object)
                 .ToList();
 
             var tweets = tweetObjects
@@ -144,7 +144,7 @@ namespace TwimgDump
                             }
 
                             var variantsArray = mediaObject["video_info"]["variants"];
-                            Debug.Assert(variantsArray.Kind == JsonValueKind.Array);
+                            Debug.Assert(variantsArray.Type == JsonNodeType.Array);
 
                             // We currently assume that the variant with the highest bitrate will be an MP4 file and
                             // have the highest resolution.
@@ -204,9 +204,9 @@ namespace TwimgDump
             Debug.Assert(response.IsSuccessStatusCode);
 
             using var jsonDocument = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
-            var jsonRoot = new JsonValue(jsonDocument);
+            var rootNode = jsonDocument.RootElement.AsJsonNode();
 
-            var guestToken = jsonRoot["guest_token"].GetString();
+            var guestToken = rootNode["guest_token"].GetString();
             Debug.Assert(guestToken is object);
 
             _httpClientHandler.CookieContainer.SetCookies(new Uri("https://twitter.com/"), $"gt={guestToken}; Max-Age=10800; Domain=.twitter.com; Path=/; Secure");
@@ -255,9 +255,9 @@ namespace TwimgDump
             Debug.Assert(response.IsSuccessStatusCode);
 
             using var jsonDocument = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
-            var jsonRoot = new JsonValue(jsonDocument);
+            var rootNode = jsonDocument.RootElement.AsJsonNode();
 
-            var userId = jsonRoot["data"]["user"]["rest_id"].GetString();
+            var userId = rootNode["data"]["user"]["rest_id"].GetString();
             Debug.Assert(userId is object);
 
             return userId;

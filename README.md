@@ -1,13 +1,13 @@
 # twimgdump
 
-Just because you've liked or retweeted a piece of media on twitter doesn't mean that it will still be there tomorrow.
-The author might suddenly become permanently suspended.  Or they might have a lapse of judgement and permanently
+Just because you've liked or retweeted a piece of media on Twitter doesn't mean that it will still be there tomorrow.
+The author might suddenly become permanently suspended.  Or they might have a lapse in judgment and irrevocably
 delete a bunch of their old tweets.  Or they might be "canceled" for Americentric ideological reasons and be bullied
 into deleting tweets deemed inappropriate.  Whatever the reason may be, the point is: if you like a user's uploaded
-media, you probably want to keep local copies of them.
+media, you probably want to take local copies of them.
 
 twimgdump is a small command-line tool I developed to help me make local copies of art uploaded by artists I follow on
-twitter.  It fetches all tweets posted to a Twitter user's media timeline and saves the attached photos, videos and
+Twitter.  It fetches all tweets posted to a Twitter user's media timeline and saves the attached photos, videos and
 GIFs to disk.
 
 ## Usage

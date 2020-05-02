@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -33,17 +35,17 @@ namespace TwimgDump
             _knownUserIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
 
-        public async Task<(IList<(string TweetId, IList<string> MediaUrls)> Tweets, string CursorTop, string CursorBottom)> FetchTweetsAsync(
-            string userScreenName,
+        public async Task<(IList<TweetMedia> Media, string CursorTop, string CursorBottom)> FetchTweetsAsync(
+            string username,
             string? cursor)
         {
             _guestToken ??= await FetchGuestTokenAsync();
             _csrfToken ??= await FetchCsrfTokenAsync();
 
-            if (!_knownUserIds.TryGetValue(userScreenName, out var userId))
+            if (!_knownUserIds.TryGetValue(username, out var userId))
             {
-                userId = await FetchUserIdAsync(userScreenName);
-                _knownUserIds.Add(userScreenName, userId);
+                userId = await FetchUserIdAsync(username);
+                _knownUserIds.Add(username, userId);
             }
 
             var requestUri = $"https://api.twitter.com/2/timeline/media/{userId}.json"
@@ -86,7 +88,7 @@ namespace TwimgDump
                     { "TE", "Trailers" },
                     { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0" },
                     { "authorization", "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA" },
-                    //{ "content-type", "application/json" }, // Included in browsers but supported in this context by .NET.
+                    //{ "content-type", "application/json" }, // Sent by browsers but not supported by .NET in this context.
                     { "x-csrf-token", _csrfToken! },
                     { "x-guest-token", _guestToken! },
                     { "x-twitter-client-language", "en" },
@@ -126,37 +128,8 @@ namespace TwimgDump
                 .Where(x => x.Type == JsonNodeType.Object)
                 .ToList();
 
-            var tweets = tweetObjects
-                .Select(x => (
-                    TweetId: x["id_str"].GetString(),
-                    MediaUrls: (IList<string>)x["extended_entities"]["media"].Elements
-                        .Select(mediaObject =>
-                        {
-                            var type = mediaObject["type"].GetString();
-                            Debug.Assert(type is object);
-
-                            if (type == "photo")
-                            {
-                                var mediaUrl = mediaObject["media_url_https"].GetString();
-                                Debug.Assert(mediaUrl is object);
-
-                                return Regex.Replace(mediaUrl, @"^(.+)\.(.+)$", "$1?format=$2&name=orig");
-                            }
-
-                            var variantsArray = mediaObject["video_info"]["variants"];
-                            Debug.Assert(variantsArray.Type == JsonNodeType.Array);
-
-                            // We currently assume that the variant with the highest bitrate will be an MP4 file and
-                            // have the highest resolution.
-
-                            return variantsArray.Elements
-                                .OrderByDescending(x => x["bitrate"].GetInt32())
-                                .Select(x => x["url"].GetString())
-                                .FirstOrDefault();
-                        })
-                        .OfType<string>()
-                        .ToList()))
-                .Where(x => x.TweetId is object && x.MediaUrls.Any())
+            var media = tweetObjects
+                .SelectMany(tweetObject => ToTweetMedia(userId, username, tweetObject))
                 .ToList();
 
             var cursorTop = entriesArray.Elements
@@ -175,7 +148,99 @@ namespace TwimgDump
                 .FirstOrDefault();
             Debug.Assert(cursorBottom is object);
 
-            return (tweets!, cursorTop, cursorBottom);
+            return (media, cursorTop, cursorBottom);
+        }
+
+        private static IEnumerable<TweetMedia> ToTweetMedia(
+            string userId,
+            string username,
+            JsonNode tweetObject)
+        {
+            var tweetId = tweetObject["id_str"].GetString();
+            Debug.Assert(tweetId is object);
+
+            var createdRaw = tweetObject["created_at"].GetString();
+            Debug.Assert(createdRaw is object);
+
+            var created = DateTime.ParseExact(
+                    createdRaw,
+                    "ddd MMM dd HH':'mm':'ss zz'00' yyyy",
+                    CultureInfo.InvariantCulture)
+                .ToUniversalTime()
+                .ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
+
+            var mediaObjects = tweetObject["extended_entities"]["media"].Elements.ToList();
+
+            var index = 1;
+            foreach (var mediaObject in mediaObjects)
+            {
+                var mediaId = mediaObject["id_str"].GetString();
+                Debug.Assert(mediaId is object);
+
+                var type = mediaObject["type"].GetString();
+                Debug.Assert(type is object);
+
+                string url;
+                string baseName;
+                string extension;
+                if (type == "photo")
+                {
+                    var urlRaw = mediaObject["media_url_https"].GetString();
+                    Debug.Assert(urlRaw is object);
+
+                    url = Regex.Replace(urlRaw, @"^(.+)\.(.+)$", "$1?format=$2&name=orig");
+
+                    var filename = new Uri(urlRaw).Segments.Last();
+
+                    baseName = Path.GetFileNameWithoutExtension(filename);
+                    extension = Path.GetExtension(filename).TrimStart('.');
+                }
+                else
+                {
+                    var variantsArray = mediaObject["video_info"]["variants"];
+                    Debug.Assert(variantsArray.Type == JsonNodeType.Array);
+
+                    // We currently assume that the variant with the highest bitrate will be an MP4 file and
+                    // have the highest resolution.
+
+                    var urlRaw = variantsArray.Elements
+                        .OrderByDescending(x => x["bitrate"].GetInt32())
+                        .Select(x => x["url"].GetString())
+                        .FirstOrDefault();
+                    Debug.Assert(urlRaw is object);
+
+                    url = urlRaw;
+
+                    var filename = new Uri(urlRaw).Segments.Last();
+
+                    baseName = Path.GetFileNameWithoutExtension(filename);
+                    extension = Path.GetExtension(filename).TrimStart('.');
+                }
+
+                var width = mediaObject["original_info"]["width"].GetInt32();
+                Debug.Assert(width is object);
+
+                var height = mediaObject["original_info"]["height"].GetInt32();
+                Debug.Assert(height is object);
+
+                yield return new TweetMedia
+                {
+                    Url = url,
+                    UserId = userId,
+                    Username = username,
+                    TweetId = tweetId,
+                    Created = created,
+                    Count = mediaObjects.Count,
+                    MediaId = mediaId,
+                    Index = index,
+                    BaseName = baseName,
+                    Extension = extension,
+                    Width = width.Value,
+                    Height = height.Value,
+                };
+
+                index += 1;
+            }
         }
 
         private async Task<string> FetchGuestTokenAsync()
@@ -194,7 +259,7 @@ namespace TwimgDump
                     { "TE", "Trailers" },
                     { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0" },
                     { "authorization", "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA" },
-                    //{ "content-type", "application/json" }, // Included in browsers but supported in this context by .NET.
+                    //{ "content-type", "application/json" }, // Sent by browsers but not supported by .NET in this context.
                     { "x-twitter-client-language", "en" },
                     { "x-twitter-active-user", "yes" },
                 },
@@ -243,7 +308,7 @@ namespace TwimgDump
                     { "TE", "Trailers" },
                     { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0" },
                     { "authorization", "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA" },
-                    //{ "content-type", "application/json" }, // Included in browsers but supported in this context by .NET.
+                    //{ "content-type", "application/json" }, // Sent by browsers but not supported by .NET in this context.
                     { "x-csrf-token", _csrfToken! },
                     { "x-guest-token", _guestToken! },
                     { "x-twitter-client-language", "en" },

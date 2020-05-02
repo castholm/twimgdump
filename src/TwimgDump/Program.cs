@@ -41,10 +41,22 @@ namespace TwimgDump
                     "  twimgdump [options] [--] <user-screen-name>",
                     "",
                     "Options:",
-                    "  -c, --cursor <cursor>            Set the initial cursor value.",
-                    "  -h, --help                       Display this help text.",
-                    "  -o, --output <output-directory>  Set the output directory.",
-                    "  -V, --version                    Display the version number."));
+                    "  -c, --cursor <cursor>",
+                    "    Set the initial cursor value.",
+                    "",
+                    "  -h, --help",
+                    "    Display this help text.",
+                    "",
+                    "  -o, --output <output-file-path-template>",
+                    "    Set the template used to determine the output file paths of",
+                    "    downloaded media.  The tokens '[userId]', '[username]', '[tweetId]',",
+                    "    '[created]', '[count]', '[mediaId]', '[index]', '[baseName]',",
+                    "    '[extension]', '[width]' and '[height]' will be substituted by the",
+                    "    attributes of retrieved media.  If not specified, the default",
+                    "    template '[username]/[tweetId]+[index].[extension]' will be used.",
+                    "",
+                    "  -V, --version",
+                    "    Display the version number."));
 
                 return;
             }
@@ -78,18 +90,18 @@ namespace TwimgDump
                 return;
             }
 
-            var outputDirectory = opts.TryGetValue("output", out var outputDirectoryArgs)
-                ? outputDirectoryArgs.First()
-                : userScreenName;
+            var outputPathTemplate = opts.TryGetValue("output", out var outputPathTemplateArgs)
+                ? outputPathTemplateArgs.Last()
+                : "[username]/[tweetId]+[index].[extension]";
 
             var currentCursor = opts.TryGetValue("cursor", out var cursorArgs)
-                ? cursorArgs.First()
+                ? cursorArgs.Last()
                 : null;
 
             using var client = new MediaTimelineClient();
-            using var downloader = new MediaDownloader(outputDirectory);
+            using var downloader = new MediaDownloader();
 
-            IList<(string TweetId, IList<string> MediaUrls)> tweets;
+            IList<TweetMedia> mediaList;
             try
             {
                 do
@@ -98,44 +110,39 @@ namespace TwimgDump
 
                     string cursorTop;
                     string cursorBottom;
-                    (tweets, cursorTop, cursorBottom) = await client.FetchTweetsAsync(userScreenName, currentCursor);
+                    (mediaList, cursorTop, cursorBottom) = await client.FetchTweetsAsync(userScreenName, currentCursor);
 
-                    Console.WriteLine("Fetched {0} tweet(s).", tweets.Count);
+                    var tweetCount = mediaList.Select(x => x.TweetId).Distinct().Count();
+
+                    Console.WriteLine("Fetched {0} tweet(s).", tweetCount);
                     Console.WriteLine("Next cursor: {0}", cursorBottom);
 
-                    var flattenedTweets = tweets
-                        .SelectMany(x => x.MediaUrls.Select((mediaUrl, i) =>
-                        {
-                            string extension;
-                            var match = Regex.Match(mediaUrl, @"\?format=([^#&]*)");
-                            if (match.Success)
-                            {
-                                extension = $".{match.Groups[1].Value}";
-                            }
-                            else
-                            {
-                                extension = Path.GetExtension(new Uri(mediaUrl).Segments.Last());
-                            }
-
-                            var filename = $"{x.TweetId}{(x.MediaUrls.Count > 1 ? $"-{i + 1}" : "")}{extension}";
-
-                            return (MediaUrl: mediaUrl, Filename: filename);
-                        }))
-                        .ToList();
-
-                    foreach (var (mediaUrl, filename) in flattenedTweets)
+                    foreach (var media in mediaList)
                     {
                         // Media is intentially downloaded in sequence (as opposed to in parallel) to keep request
                         // rates low and stay clear of potential rate limiting.
 
-                        await downloader.DownloadAsync(mediaUrl, filename);
+                        var file = outputPathTemplate
+                            .Replace("[userId]", Sanitize(media.UserId), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[username]", Sanitize(media.Username), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[tweetId]", Sanitize(media.TweetId), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[created]", Sanitize(media.Created), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[count]", Sanitize(((uint)media.Count).ToString()), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[mediaId]", Sanitize(media.MediaId), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[index]", Sanitize(((uint)media.Index).ToString()), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[baseName]", Sanitize(media.BaseName), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[extension]", Sanitize(media.Extension), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[width]", Sanitize(((uint)media.Width).ToString()), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[height]", Sanitize(((uint)media.Height).ToString()), StringComparison.OrdinalIgnoreCase);
+
+                        await downloader.DownloadAsync(media.Url, file);
                     }
 
-                    Console.WriteLine("Downloaded {0} file(s).", flattenedTweets.Count);
+                    Console.WriteLine("Downloaded {0} file(s).", mediaList.Count);
 
                     currentCursor = cursorBottom;
                 }
-                while (tweets.Any());
+                while (mediaList.Any());
             }
             catch (Exception e)
             {
@@ -154,5 +161,8 @@ namespace TwimgDump
             Console.WriteLine("Usage: twimgdump [options] [--] <user-screen-name>");
             Console.WriteLine("Try 'twimgdump --help' for more information.");
         }
+
+        private static string Sanitize(string input)
+            => Regex.Replace(input, "[^-0-9A-Z_a-z]", "");
     }
 }

@@ -17,24 +17,38 @@ Usage:
   twimgdump [options] [--] <user-screen-name>
 
 Options:
-  -c, --cursor <cursor>            Set the initial cursor value.
-  -h, --help                       Display this help text.
-  -o, --output <output-directory>  Set the output directory.
-  -V, --version                    Display the version number.
+  -c, --cursor <cursor>
+    Set the initial cursor value.
+
+  -h, --help
+    Display this help text.
+
+  -o, --output <output-file-path-template>
+    Set the template used to determine the output file paths of
+    downloaded media.  The tokens '[userId]', '[username]', '[tweetId]',
+    '[created]', '[count]', '[mediaId]', '[index]', '[baseName]',
+    '[extension]', '[width]' and '[height]' will be substituted by the
+    attributes of retrieved media.  If not specified, the default
+    template '[username]/[tweetId]+[index].[extension]' will be used.
+
+  -V, --version
+    Display the version number.
 ```
 
 ## Features
 
-* Downloads all photos, videos and GIFs (read: also videos) from a Twitter user's media timeline.
+* Downloads all photos, videos and GIFs (read: also videos) from a Twitter user's media timeline using the highest
+  resolution and quality options available.
 * Uses the API the twitter.com website itself uses, meaning that no authentication or API keys are required.
-* Encodes the ID of the tweets in the names of downloaded files for easy reverse lookup.
+* **New:** Offers granular control over the output file path of downloaded media using file path templates like
+`[username]/[tweetId]/[baseName]_[width]x[height].[extension]`.
 * Supports downloading media from profiles marked as containing sensitive content.
 
 ## Limitations
 
 * Only downloads media from a specific user; does not support downloading media matching an arbitrary search query.
 * Very brittle; the program may terminate unexpectedly upon receiving non-successful or malformed responses.
-* Does not currently handle rate limits at all (though this usually won't be a problem unless you're downloading a
+* Does not currently handle rate limiting at all (though this usually won't be a problem unless you're downloading a
   massive amount of media).
 * Does not currently support downloading media from protected profiles.
 * **Will** break if Twitter makes sudden changes to their API.

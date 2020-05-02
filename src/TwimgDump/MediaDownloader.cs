@@ -11,11 +11,8 @@ namespace TwimgDump
     {
         private readonly HttpClientHandler _httpClientHandler;
         private readonly HttpClient _httpClient;
-        private readonly string _downloadDirectoryPath;
 
-        private bool _hasInitializedDownloadDirectory;
-
-        public MediaDownloader(string downloadDirectoryPath)
+        public MediaDownloader()
         {
             _httpClientHandler = new HttpClientHandler
             {
@@ -39,29 +36,19 @@ namespace TwimgDump
                     { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0" },
                 },
             };
-
-            _downloadDirectoryPath = downloadDirectoryPath;
         }
 
-        public async Task DownloadAsync(string uri, string filename)
+        public async Task DownloadAsync(string uri, string file)
         {
             var request = new HttpRequestMessage(HttpMethod.Get, uri);
 
             var response = await _httpClient.SendAsync(request);
             Debug.Assert(response.IsSuccessStatusCode);
 
-            if (!_hasInitializedDownloadDirectory)
-            {
-                if (!Directory.Exists(_downloadDirectoryPath))
-                {
-                    Directory.CreateDirectory(_downloadDirectoryPath);
-                }
-
-                _hasInitializedDownloadDirectory = true;
-            }
+            Directory.CreateDirectory(Path.GetDirectoryName(file));
 
             using var contentStream = await response.Content.ReadAsStreamAsync();
-            using var fileStream = File.Create(Path.Join(_downloadDirectoryPath, filename));
+            using var fileStream = File.Create(file);
 
             await contentStream.CopyToAsync(fileStream);
         }

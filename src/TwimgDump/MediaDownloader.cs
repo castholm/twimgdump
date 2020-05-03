@@ -40,12 +40,12 @@ namespace TwimgDump
 
         public async Task DownloadAsync(string uri, string file)
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(file));
+
             var request = new HttpRequestMessage(HttpMethod.Get, uri);
 
-            var response = await _httpClient.SendAsync(request);
+            using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
             Debug.Assert(response.IsSuccessStatusCode);
-
-            Directory.CreateDirectory(Path.GetDirectoryName(file));
 
             using var contentStream = await response.Content.ReadAsStreamAsync();
             using var fileStream = File.Create(file);

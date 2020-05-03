@@ -3,10 +3,10 @@ namespace TwimgDump.Json
     internal enum JsonNodeType
     {
         None,
-        String,
-        Number,
-        Boolean,
         Null,
+        Boolean,
+        Number,
+        String,
         Object,
         Array,
     }

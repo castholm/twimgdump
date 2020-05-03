@@ -116,13 +116,13 @@ namespace TwimgDump
             var instructionsArray = rootNode["timeline"]["instructions"];
             Debug.Assert(instructionsArray.Type == JsonNodeType.Array);
 
-            var entriesArray = instructionsArray.Elements
+            var entriesArray = instructionsArray.EnumerateElements()
                 .Select(x => x["addEntries"]["entries"])
                 .Where(x => x.Type == JsonNodeType.Array)
                 .FirstOrDefault();
             Debug.Assert(entriesArray.Type == JsonNodeType.Array);
 
-            var tweetObjects = entriesArray.Elements
+            var tweetObjects = entriesArray.EnumerateElements()
                 .OrderByDescending(x => x["sortIndex"].GetString(), StringComparer.Ordinal)
                 .Select(x => tweetsObject[x["content"]["item"]["content"]["tweet"]["id"].GetString()])
                 .Where(x => x.Type == JsonNodeType.Object)
@@ -132,7 +132,7 @@ namespace TwimgDump
                 .SelectMany(tweetObject => ToTweetMedia(userId, username, tweetObject))
                 .ToList();
 
-            var cursorTop = entriesArray.Elements
+            var cursorTop = entriesArray.EnumerateElements()
                 .Select(x => x["content"]["operation"]["cursor"])
                 .Where(x => x["cursorType"].GetString() == "Top")
                 .Select(x => x["value"].GetString())
@@ -140,7 +140,7 @@ namespace TwimgDump
                 .FirstOrDefault();
             Debug.Assert(cursorTop is object);
 
-            var cursorBottom = entriesArray.Elements
+            var cursorBottom = entriesArray.EnumerateElements()
                 .Select(x => x["content"]["operation"]["cursor"])
                 .Where(x => x["cursorType"].GetString() == "Bottom")
                 .Select(x => x["value"].GetString())
@@ -169,7 +169,7 @@ namespace TwimgDump
                 .ToUniversalTime()
                 .ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
 
-            var mediaObjects = tweetObject["extended_entities"]["media"].Elements.ToList();
+            var mediaObjects = tweetObject["extended_entities"]["media"].EnumerateElements().ToList();
 
             var index = 1;
             foreach (var mediaObject in mediaObjects)
@@ -203,7 +203,7 @@ namespace TwimgDump
                     // We currently assume that the variant with the highest bitrate will be an MP4 file and
                     // have the highest resolution.
 
-                    var urlRaw = variantsArray.Elements
+                    var urlRaw = variantsArray.EnumerateElements()
                         .OrderByDescending(x => x["bitrate"].GetInt32())
                         .Select(x => x["url"].GetString())
                         .FirstOrDefault();

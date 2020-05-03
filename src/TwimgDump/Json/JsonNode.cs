@@ -27,43 +27,6 @@ namespace TwimgDump.Json
                 _ => JsonNodeType.None,
             };
 
-        public int? Length
-            => _element.ValueKind == JsonValueKind.Array
-                ? (int?)_element.GetArrayLength()
-                : null;
-
-        public IEnumerable<JsonNode> Elements
-        {
-            get
-            {
-                if (_element.ValueKind != JsonValueKind.Array)
-                {
-                    yield break;
-                }
-
-                foreach (var element in _element.EnumerateArray())
-                {
-                    yield return new JsonNode(element);
-                }
-            }
-        }
-
-        public IEnumerable<(string Name, JsonNode Value)> Members
-        {
-            get
-            {
-                if (_element.ValueKind != JsonValueKind.Object)
-                {
-                    yield break;
-                }
-
-                foreach (var element in _element.EnumerateObject())
-                {
-                    yield return (element.Name, new JsonNode(element.Value));
-                }
-            }
-        }
-
         public JsonNode this[int? index]
             => index is int
             && _element.ValueKind == JsonValueKind.Array
@@ -78,10 +41,13 @@ namespace TwimgDump.Json
                 ? new JsonNode(element)
                 : default;
 
-        public string? GetString()
-            => _element.ValueKind == JsonValueKind.String
-                ? _element.GetString()
-                : null;
+        public bool? GetBoolean()
+            => _element.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                _ => null,
+            };
 
         public byte? GetByte()
             => _element.ValueKind == JsonValueKind.Number
@@ -149,11 +115,41 @@ namespace TwimgDump.Json
                 ? (decimal?)value
                 : null;
 
-        public bool? GetBoolean()
-            => _element.ValueKind == JsonValueKind.True
-            || _element.ValueKind == JsonValueKind.False
-                ? (bool?)_element.GetBoolean()
+        public string? GetString()
+            => _element.ValueKind == JsonValueKind.String
+                ? _element.GetString()
                 : null;
+
+        public IEnumerable<(string Name, JsonNode Value)> EnumerateMembers()
+        {
+            if (_element.ValueKind != JsonValueKind.Object)
+            {
+                yield break;
+            }
+
+            foreach (var element in _element.EnumerateObject())
+            {
+                yield return (element.Name, new JsonNode(element.Value));
+            }
+        }
+
+        public int? GetLength()
+            => _element.ValueKind == JsonValueKind.Array
+                ? (int?)_element.GetArrayLength()
+                : null;
+
+        public IEnumerable<JsonNode> EnumerateElements()
+        {
+            if (_element.ValueKind != JsonValueKind.Array)
+            {
+                yield break;
+            }
+
+            foreach (var element in _element.EnumerateArray())
+            {
+                yield return new JsonNode(element);
+            }
+        }
 
         public JsonElement AsJsonElement()
             => _element;

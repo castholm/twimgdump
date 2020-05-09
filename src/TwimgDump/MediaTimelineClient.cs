@@ -166,11 +166,17 @@ namespace TwimgDump
                     NumberStyles.Integer,
                     CultureInfo.InvariantCulture);
 
-                var type = mediaObject["type"].GetString()!;
+                var type = mediaObject["type"].GetString()!.ToUpperInvariant() switch
+                {
+                    "PHOTO" => TweetMediaType.Photo,
+                    "VIDEO" => TweetMediaType.Video,
+                    "ANIMATED_GIF" => TweetMediaType.AnimatedGif,
+                    _ => throw new InvalidOperationException("Unknown media type."),
+                };
 
                 Uri urlRaw;
                 Uri urlFormatted;
-                if (type == "photo")
+                if (type == TweetMediaType.Photo)
                 {
                     urlRaw = new Uri(mediaObject["media_url_https"].GetString()!);
 
@@ -202,6 +208,7 @@ namespace TwimgDump
 
                 yield return new TweetMedia(
                     urlFormatted,
+                    type,
                     _userId!.Value,
                     _username,
                     tweetId,

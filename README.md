@@ -32,6 +32,11 @@ Options:
         will be substituted by the corresponding attributes of retrieved
         media.
 
+    -t, --types <types>
+        Limits the types of media to be downloaded.  Possible values are
+        'photo', 'video' and 'animated-gif'.  Multiple values are
+        separated by commas.
+
     -V, --version
         Displays the version number.
 ```

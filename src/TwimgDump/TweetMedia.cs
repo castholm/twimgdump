@@ -6,6 +6,7 @@ namespace TwimgDump
     {
         public TweetMedia(
             Uri url,
+            TweetMediaType type,
             ulong userId,
             string username,
             ulong tweetId,
@@ -19,6 +20,7 @@ namespace TwimgDump
             int height)
         {
             Url = url;
+            Type = type;
             UserId = userId;
             Username = username;
             TweetId = tweetId;
@@ -33,6 +35,7 @@ namespace TwimgDump
         }
 
         public Uri Url { get; }
+        public TweetMediaType Type { get; }
 
         public ulong UserId { get; }
         public string Username { get; }

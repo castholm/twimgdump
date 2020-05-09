@@ -21,6 +21,7 @@ namespace TwimgDump
                     ("c", "cursor", true),
                     ("h", "help", false),
                     ("o", "output", true),
+                    ("t", "types", true),
                     ("V", "version", false),
                 });
             }
@@ -54,6 +55,11 @@ namespace TwimgDump
                     "        '[extension]', '[index]', '[count]', '[width]' and '[height]'",
                     "        will be substituted by the corresponding attributes of retrieved",
                     "        media.",
+                    "",
+                    "    -t, --types <types>",
+                    "        Limits the types of media to be downloaded.  Possible values are",
+                    "        'photo', 'video' and 'animated-gif'.  Multiple values are",
+                    "        separated by commas.",
                     "",
                     "    -V, --version",
                     "        Displays the version number."));
@@ -98,6 +104,24 @@ namespace TwimgDump
                 ? cursorArgs.Last()
                 : null;
 
+            var types = opts.TryGetValue("types", out var typesArgs)
+                ? typesArgs.Last()
+                    .Split(',')
+                    .Select(x => x.Trim().ToUpperInvariant() switch
+                    {
+                        "PHOTO" => TweetMediaType.Photo,
+                        "VIDEO" => TweetMediaType.Video,
+                        "ANIMATED-GIF" => TweetMediaType.AnimatedGif,
+                        _ => throw new InvalidOperationException("Unknown media type."),
+                    })
+                    .ToHashSet()
+                : new HashSet<TweetMediaType>(new[]
+                {
+                    TweetMediaType.Photo,
+                    TweetMediaType.Video,
+                    TweetMediaType.AnimatedGif,
+                });
+
             using var client = new MediaTimelineClient(username);
             using var downloader = new MediaDownloader();
 
@@ -119,6 +143,11 @@ namespace TwimgDump
 
                     foreach (var media in mediaList)
                     {
+                        if (!types.Contains(media.Type))
+                        {
+                            continue;
+                        }
+
                         // Media is intentially downloaded in sequence (as opposed to in parallel) to keep request
                         // rates low and stay clear of potential rate limiting.
 

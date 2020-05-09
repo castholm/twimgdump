@@ -37,25 +37,26 @@ namespace TwimgDump
                 Console.WriteLine(string.Join(
                     Environment.NewLine,
                     "Usage:",
-                    "  twimgdump [options] [--] <user-screen-name>",
+                    "    twimgdump [options] [--] <username>",
                     "",
                     "Options:",
-                    "  -c, --cursor <cursor>",
-                    "    Set the initial cursor value.",
+                    "    -c, --cursor <cursor>",
+                    "        Sets the initial cursor value.",
                     "",
-                    "  -h, --help",
-                    "    Display this help text.",
+                    "    -h, --help",
+                    "        Displays this help text.",
                     "",
-                    "  -o, --output <output-file-path-template>",
-                    "    Set the template used to determine the output file paths of",
-                    "    downloaded media.  The tokens '[userId]', '[username]', '[tweetId]',",
-                    "    '[created]', '[count]', '[mediaId]', '[index]', '[baseName]',",
-                    "    '[extension]', '[width]' and '[height]' will be substituted by the",
-                    "    attributes of retrieved media.  If not specified, the default",
-                    "    template '[username]/[tweetId]+[index].[extension]' will be used.",
+                    "    -o, --output <output-file-path-template>",
+                    "        Sets the template used to determine the output file paths of",
+                    "        downloaded media.  The tokens '[user-id]', '[username]',",
+                    "        '[tweet-id]', '[year]', '[month]', '[day]', '[hour]',",
+                    "        '[minute]', '[second]', '[millisecond]', '[media-id]', '[stem]',",
+                    "        '[extension]', '[index]', '[count]', '[width]' and '[height]'",
+                    "        will be substituted by the corresponding attributes of retrieved",
+                    "        media.",
                     "",
-                    "  -V, --version",
-                    "    Display the version number."));
+                    "    -V, --version",
+                    "        Displays the version number."));
 
                 return;
             }
@@ -73,8 +74,8 @@ namespace TwimgDump
                 return;
             }
 
-            var userScreenName = (string?)positionalArgs.ElementAtOrDefault(0);
-            if (userScreenName is null)
+            var username = (string?)positionalArgs.ElementAtOrDefault(0);
+            if (username is null)
             {
                 PrintUsage();
 
@@ -91,13 +92,13 @@ namespace TwimgDump
 
             var outputPathTemplate = opts.TryGetValue("output", out var outputPathTemplateArgs)
                 ? outputPathTemplateArgs.Last()
-                : "[username]/[tweetId]+[index].[extension]";
+                : "[username]/[tweet-id]-[index][extension]";
 
             var currentCursor = opts.TryGetValue("cursor", out var cursorArgs)
                 ? cursorArgs.Last()
                 : null;
 
-            using var client = new MediaTimelineClient();
+            using var client = new MediaTimelineClient(username);
             using var downloader = new MediaDownloader();
 
             IList<TweetMedia> mediaList;
@@ -109,7 +110,7 @@ namespace TwimgDump
 
                     string cursorTop;
                     string cursorBottom;
-                    (mediaList, cursorTop, cursorBottom) = await client.FetchTweetsAsync(userScreenName, currentCursor);
+                    (mediaList, cursorTop, cursorBottom) = await client.FetchTweetsAsync(currentCursor);
 
                     var tweetCount = mediaList.Select(x => x.TweetId).Distinct().Count();
 
@@ -122,17 +123,23 @@ namespace TwimgDump
                         // rates low and stay clear of potential rate limiting.
 
                         var file = outputPathTemplate
-                            .Replace("[userId]", Sanitize(media.UserId), StringComparison.OrdinalIgnoreCase)
-                            .Replace("[username]", Sanitize(media.Username), StringComparison.OrdinalIgnoreCase)
-                            .Replace("[tweetId]", Sanitize(media.TweetId), StringComparison.OrdinalIgnoreCase)
-                            .Replace("[created]", Sanitize(media.Created), StringComparison.OrdinalIgnoreCase)
-                            .Replace("[count]", Sanitize(((uint)media.Count).ToString()), StringComparison.OrdinalIgnoreCase)
-                            .Replace("[mediaId]", Sanitize(media.MediaId), StringComparison.OrdinalIgnoreCase)
-                            .Replace("[index]", Sanitize(((uint)media.Index).ToString()), StringComparison.OrdinalIgnoreCase)
-                            .Replace("[baseName]", Sanitize(media.BaseName), StringComparison.OrdinalIgnoreCase)
-                            .Replace("[extension]", Sanitize(media.Extension), StringComparison.OrdinalIgnoreCase)
-                            .Replace("[width]", Sanitize(((uint)media.Width).ToString()), StringComparison.OrdinalIgnoreCase)
-                            .Replace("[height]", Sanitize(((uint)media.Height).ToString()), StringComparison.OrdinalIgnoreCase);
+                            .Replace("[user-id]", media.UserId.ToString(), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[username]", SanitizeFilenameComponent(media.Username), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[tweet-id]", media.TweetId.ToString(), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[year]", ((uint)media.Created.Year).ToString("D4"), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[month]", ((uint)media.Created.Month).ToString("D2"), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[day]", ((uint)media.Created.Day).ToString("D2"), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[hour]", ((uint)media.Created.Hour).ToString("D2"), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[minute]", ((uint)media.Created.Minute).ToString("D2"), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[second]", ((uint)media.Created.Second).ToString("D2"), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[millisecond]", ((uint)media.Created.Millisecond).ToString("D3"), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[media-id]", media.MediaId.ToString(), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[stem]", SanitizeFilenameComponent(media.Stem), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[extension]", SanitizeFilenameComponent(media.Extension), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[index]", ((uint)media.Index).ToString(), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[count]", ((uint)media.Count).ToString(), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[width]", ((uint)media.Width).ToString(), StringComparison.OrdinalIgnoreCase)
+                            .Replace("[height]", ((uint)media.Height).ToString(), StringComparison.OrdinalIgnoreCase);
 
                         await downloader.DownloadAsync(media.Url, file);
                     }
@@ -161,7 +168,7 @@ namespace TwimgDump
             Console.WriteLine("Try 'twimgdump --help' for more information.");
         }
 
-        private static string Sanitize(string input)
-            => Regex.Replace(input, "[^-0-9A-Z_a-z]", "");
+        private static string SanitizeFilenameComponent(string input)
+            => Regex.Replace(input, @"[^A-Za-z0-9\-_.]", "");
     }
 }

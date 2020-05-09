@@ -1,21 +1,51 @@
+using System;
+
 namespace TwimgDump
 {
     public sealed class TweetMedia
     {
-        public string Url { get; set; } = null!;
+        public TweetMedia(
+            Uri url,
+            ulong userId,
+            string username,
+            ulong tweetId,
+            DateTimeOffset created,
+            ulong mediaId,
+            string stem,
+            string extension,
+            int index,
+            int count,
+            int width,
+            int height)
+        {
+            Url = url;
+            UserId = userId;
+            Username = username;
+            TweetId = tweetId;
+            Created = created;
+            MediaId = mediaId;
+            Stem = stem;
+            Extension = extension;
+            Index = index;
+            Count = count;
+            Width = width;
+            Height = height;
+        }
 
-        public string UserId { get; set; } = null!;
-        public string Username { get; set; } = null!;
+        public Uri Url { get; }
 
-        public string TweetId { get; set; } = null!;
-        public string Created { get; set; } = null!;
-        public int Count { get; set; }
+        public ulong UserId { get; }
+        public string Username { get; }
 
-        public string MediaId { get; set; } = null!;
-        public int Index { get; set; }
-        public string BaseName { get; set; } = null!;
-        public string Extension { get; set; } = null!;
-        public int Width { get; set; }
-        public int Height { get; set; }
+        public ulong TweetId { get; }
+        public DateTimeOffset Created { get; }
+
+        public ulong MediaId { get; }
+        public string Stem { get; }
+        public string Extension { get; }
+        public int Index { get; }
+        public int Count { get; }
+        public int Width { get; }
+        public int Height { get; }
     }
 }

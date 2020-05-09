@@ -38,7 +38,7 @@ namespace TwimgDump
             };
         }
 
-        public async Task DownloadAsync(string uri, string file)
+        public async Task DownloadAsync(Uri uri, string file)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(file));
 

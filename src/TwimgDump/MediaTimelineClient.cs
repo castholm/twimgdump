@@ -17,12 +17,13 @@ namespace TwimgDump
     {
         private readonly HttpClientHandler _httpClientHandler;
         private readonly HttpClient _httpClient;
-        private readonly Dictionary<string, string> _knownUserIds;
+        private readonly string _username;
 
         private string? _guestToken;
         private string? _csrfToken;
+        private ulong? _userId;
 
-        public MediaTimelineClient()
+        public MediaTimelineClient(string username)
         {
             _httpClientHandler = new HttpClientHandler
             {
@@ -32,23 +33,16 @@ namespace TwimgDump
                     | DecompressionMethods.Brotli,
             };
             _httpClient = new HttpClient(_httpClientHandler, disposeHandler: false);
-            _knownUserIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            _username = username;
         }
 
-        public async Task<(IList<TweetMedia> Media, string CursorTop, string CursorBottom)> FetchTweetsAsync(
-            string username,
-            string? cursor)
+        public async Task<(IList<TweetMedia> Media, string CursorTop, string CursorBottom)> FetchTweetsAsync(string? cursor)
         {
             _guestToken ??= await FetchGuestTokenAsync();
             _csrfToken ??= await FetchCsrfTokenAsync();
+            _userId ??= await FetchUserIdAsync();
 
-            if (!_knownUserIds.TryGetValue(username, out var userId))
-            {
-                userId = await FetchUserIdAsync(username);
-                _knownUserIds.Add(username, userId);
-            }
-
-            var requestUri = $"https://api.twitter.com/2/timeline/media/{userId}.json"
+            var requestUri = $"https://api.twitter.com/2/timeline/media/{_userId}.json"
                 + "?include_profile_interstitial_type=1"
                 + "&include_blocking=1"
                 + "&include_blocked_by=1"
@@ -129,7 +123,7 @@ namespace TwimgDump
                 .ToList();
 
             var media = tweetObjects
-                .SelectMany(tweetObject => ToTweetMedia(userId, username, tweetObject))
+                .SelectMany(tweetObject => ToTweetMedia(tweetObject))
                 .ToList();
 
             var cursorTop = entriesArray.EnumerateElements()
@@ -137,63 +131,50 @@ namespace TwimgDump
                 .Where(x => x["cursorType"].GetString() == "Top")
                 .Select(x => x["value"].GetString())
                 .OfType<string>()
-                .FirstOrDefault();
-            Debug.Assert(cursorTop is object);
+                .First();
 
             var cursorBottom = entriesArray.EnumerateElements()
                 .Select(x => x["content"]["operation"]["cursor"])
                 .Where(x => x["cursorType"].GetString() == "Bottom")
                 .Select(x => x["value"].GetString())
                 .OfType<string>()
-                .FirstOrDefault();
-            Debug.Assert(cursorBottom is object);
+                .First();
 
             return (media, cursorTop, cursorBottom);
         }
 
-        private static IEnumerable<TweetMedia> ToTweetMedia(
-            string userId,
-            string username,
-            JsonNode tweetObject)
+        private IEnumerable<TweetMedia> ToTweetMedia(JsonNode tweetObject)
         {
-            var tweetId = tweetObject["id_str"].GetString();
-            Debug.Assert(tweetId is object);
-
-            var createdRaw = tweetObject["created_at"].GetString();
-            Debug.Assert(createdRaw is object);
+            var tweetId = ulong.Parse(
+                tweetObject["id_str"].GetString()!,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture);
 
             var created = DateTime.ParseExact(
-                    createdRaw,
+                    tweetObject["created_at"].GetString()!,
                     "ddd MMM dd HH':'mm':'ss zz'00' yyyy",
-                    CultureInfo.InvariantCulture)
-                .ToUniversalTime()
-                .ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None);
 
             var mediaObjects = tweetObject["extended_entities"]["media"].EnumerateElements().ToList();
 
-            var index = 1;
+            var currentIndex = 1;
             foreach (var mediaObject in mediaObjects)
             {
-                var mediaId = mediaObject["id_str"].GetString();
-                Debug.Assert(mediaId is object);
+                var mediaId = ulong.Parse(
+                    mediaObject["id_str"].GetString()!,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture);
 
-                var type = mediaObject["type"].GetString();
-                Debug.Assert(type is object);
+                var type = mediaObject["type"].GetString()!;
 
-                string url;
-                string baseName;
-                string extension;
+                Uri urlRaw;
+                Uri urlFormatted;
                 if (type == "photo")
                 {
-                    var urlRaw = mediaObject["media_url_https"].GetString();
-                    Debug.Assert(urlRaw is object);
+                    urlRaw = new Uri(mediaObject["media_url_https"].GetString()!);
 
-                    url = Regex.Replace(urlRaw, @"^(.+)\.(.+)$", "$1?format=$2&name=orig");
-
-                    var filename = new Uri(urlRaw).Segments.Last();
-
-                    baseName = Path.GetFileNameWithoutExtension(filename);
-                    extension = Path.GetExtension(filename).TrimStart('.');
+                    urlFormatted = new Uri(Regex.Replace(urlRaw.AbsoluteUri, @"^(.+)\.(.+)$", "$1?format=$2&name=orig"));
                 }
                 else
                 {
@@ -203,43 +184,37 @@ namespace TwimgDump
                     // We currently assume that the variant with the highest bitrate will be an MP4 file and
                     // have the highest resolution.
 
-                    var urlRaw = variantsArray.EnumerateElements()
+                    urlRaw = variantsArray.EnumerateElements()
                         .OrderByDescending(x => x["bitrate"].GetInt32())
-                        .Select(x => x["url"].GetString())
-                        .FirstOrDefault();
-                    Debug.Assert(urlRaw is object);
+                        .Select(x => new Uri(x["url"].GetString()!))
+                        .First();
 
-                    url = urlRaw;
-
-                    var filename = new Uri(urlRaw).Segments.Last();
-
-                    baseName = Path.GetFileNameWithoutExtension(filename);
-                    extension = Path.GetExtension(filename).TrimStart('.');
+                    urlFormatted = urlRaw;
                 }
 
-                var width = mediaObject["original_info"]["width"].GetInt32();
-                Debug.Assert(width is object);
+                var filename = urlRaw.Segments.Last();
 
-                var height = mediaObject["original_info"]["height"].GetInt32();
-                Debug.Assert(height is object);
+                var stem = Path.GetFileNameWithoutExtension(filename);
+                var extension = Path.GetExtension(filename);
 
-                yield return new TweetMedia
-                {
-                    Url = url,
-                    UserId = userId,
-                    Username = username,
-                    TweetId = tweetId,
-                    Created = created,
-                    Count = mediaObjects.Count,
-                    MediaId = mediaId,
-                    Index = index,
-                    BaseName = baseName,
-                    Extension = extension,
-                    Width = width.Value,
-                    Height = height.Value,
-                };
+                var width = mediaObject["original_info"]["width"].GetInt32()!.Value;
+                var height = mediaObject["original_info"]["height"].GetInt32()!.Value;
 
-                index += 1;
+                yield return new TweetMedia(
+                    urlFormatted,
+                    _userId!.Value,
+                    _username,
+                    tweetId,
+                    created,
+                    mediaId,
+                    stem,
+                    extension,
+                    currentIndex,
+                    mediaObjects.Count,
+                    width,
+                    height);
+
+                currentIndex += 1;
             }
         }
 
@@ -271,8 +246,7 @@ namespace TwimgDump
             using var jsonDocument = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
             var rootNode = jsonDocument.RootElement.AsJsonNode();
 
-            var guestToken = rootNode["guest_token"].GetString();
-            Debug.Assert(guestToken is object);
+            var guestToken = rootNode["guest_token"].GetString()!;
 
             _httpClientHandler.CookieContainer.SetCookies(new Uri("https://twitter.com/"), $"gt={guestToken}; Max-Age=10800; Domain=.twitter.com; Path=/; Secure");
 
@@ -292,9 +266,9 @@ namespace TwimgDump
             return Task.FromResult(csrfToken);
         }
 
-        private async Task<string> FetchUserIdAsync(string userScreenName)
+        private async Task<ulong> FetchUserIdAsync()
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.twitter.com/graphql/P8ph10GzBbdMqWZxulqCfA/UserByScreenName?variables=%7B%22screen_name%22%3A%22{userScreenName}%22%2C%22withHighlightedLabel%22%3Afalse%7D")
+            var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.twitter.com/graphql/P8ph10GzBbdMqWZxulqCfA/UserByScreenName?variables=%7B%22screen_name%22%3A%22{_username}%22%2C%22withHighlightedLabel%22%3Afalse%7D")
             {
                 Headers =
                 {
@@ -322,8 +296,10 @@ namespace TwimgDump
             using var jsonDocument = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
             var rootNode = jsonDocument.RootElement.AsJsonNode();
 
-            var userId = rootNode["data"]["user"]["rest_id"].GetString();
-            Debug.Assert(userId is object);
+            var userId = ulong.Parse(
+                rootNode["data"]["user"]["rest_id"].GetString()!,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture);
 
             return userId;
         }
